@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pindahan Fail P2P Selamat</title>
+  
+  <!-- Library PeerJS (WebRTC Sambungan P2P) -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- Library QRCode (Penjana QR Code) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- Library Html5Qrcode (Pengimbas Kamera QR) -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; max-width: 500px; margin: auto; background: #f0f2f5; color: #333; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 20px; text-align: center; }
+    .id-box { font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #007bff; margin: 10px 0; }
+    input[type="text"] { width: 100%; padding: 12px; font-size: 20px; text-align: center; border: 2px solid #ddd; border-radius: 8px; margin-bottom: 12px; }
+    button { padding: 12px 20px; font-size: 16px; font-weight: bold; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 5px; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    #qrcode { display: flex; justify-content: center; margin: 15px 0; }
+    #reader { width: 100%; margin-top: 10px; }
+    .status { margin-top: 12px; font-size: 14px; font-weight: bold; color: #555; word-break: break-all; }
+    
+    /* Bar Kemajuan (Progress Bar) */
+    .progress-container { width: 100%; background-color: #e0e0e0; border-radius: 8px; margin-top: 15px; display: none; overflow: hidden; }
+    .progress-bar { width: 0%; height: 18px; background-color: #28a745; text-align: center; line-height: 18px; color: white; font-size: 12px; transition: width 0.2s; }
+  </style>
+</head>
+<body>
+
+  <h2 style="text-align: center;">Pindahan Fail P2P</h2>
+
+  <!-- SEKSYEN 1: PERANTI INI -->
+  <div class="card">
+    <h3 style="margin-top:0;">ID Peranti Ini</h3>
+    <p style="font-size: 14px; color: #666;">Kongsi PIN 6-angka ini atau imbas QR:</p>
+    <div class="id-box" id="my-pin">------</div>
+    <div id="qrcode"></div>
+  </div>
+
+  <!-- SEKSYEN 2: SAMBUNG PERANTI LAIN -->
+  <div class="card">
+    <h3 style="margin-top:0;">Sambung Peranti Sasaran</h3>
+    <input type="text" id="target-pin" placeholder="Masukkan 6 Angka PIN" maxlength="6">
+    <button onclick="connectByPin()">Sambung Guna PIN</button>
+    <p style="margin: 10px 0; color: #888;">— ATAU —</p>
+    <button onclick="startScanner()" style="background:#28a745;">Imbas Kamera QR</button>
+    <div id="reader"></div>
+  </div>
+
+  <!-- SEKSYEN 3: HANTAR FAIL -->
+  <div class="card">
+    <h3 style="margin-top:0;">Hantar Fail</h3>
+    <input type="file" id="file-input" disabled>
+    <br><br>
+    <button id="send-btn" onclick="sendFile()" disabled>Hantar Fail</button>
+    
+    <div class="progress-container" id="progress-box">
+      <div class="progress-bar" id="my-progress-bar">0%</div>
+    </div>
+    
+    <div class="status" id="status-msg">Inisialisasi peranti...</div>
+  </div>
+
+  <script>
+    // Awalan unik untuk elak pertindihan dengan pengguna PeerJS lain di dunia
+    const peerPrefix = "haziq-p2p-v2-";
+    let randomPin = "";
+    let peer = null;
+    let conn = null;
+    let qrCodeObj = null;
+
+    function generatePin() {
+      return Math.floor(100000 + Math.random() * 900000).toString();
+    }
+
+    function initPeer() {
+      randomPin = generatePin();
+      document.getElementById('my-pin').innerText = randomPin;
+
+      // Bina QR Code
+      if (qrCodeObj) {
+        qrCodeObj.clear();
+        qrCodeObj.makeCode(randomPin);
+      } else {
+        qrCodeObj = new QRCode(document.getElementById("qrcode"), {
+          text: randomPin,
+          width: 128,
+          height: 128
+        });
+      }
+
+      const fullMyId = peerPrefix + randomPin;
+      peer = new Peer(fullMyId);
+
+      peer.on('open', function(id) {
+        document.getElementById('status-msg').innerText = "Sedia untuk disambungkan.";
+      });
+
+      // Elak ralat jika PIN kebetulan sedang digunakan orang lain
+      peer.on('error', function(err) {
+        if (err.type === 'unavailable-id') {
+          document.getElementById('status-msg').innerText = "PIN bertindih, menjana PIN baharu...";
+          peer.destroy();
+          initPeer(); // Jana semula PIN baharu automatik
+        } else {
+          document.getElementById('status-msg').innerText = "Ralat: " + err.type;
+        }
+      });
+
+      // Menerima sambungan daripada peranti lain
+      peer.on('connection', function(c) {
+        conn = c;
+        setupConnection();
+      });
+    }
+
+    // Sambung menggunakan PIN 6 angka
+    function connectByPin() {
+      const pin = document.getElementById('target-pin').value.trim();
+      if (pin.length !== 6) {
+        alert("Sila masukkan 6 angka PIN yang betul!");
+        return;
+      }
+      const targetFullId = peerPrefix + pin;
+      document.getElementById('status-msg').innerText = "Menghubungkan ke ID " + pin + "...";
+      conn = peer.connect(targetFullId);
+      setupConnection();
+    }
+
+    // Tetapan Sambungan & Pengendalian Data Fail
+    function setupConnection() {
+      conn.on('open', function() {
+        document.getElementById('status-msg').innerText = "Tersambung! Sedia menghantar fail.";
+        document.getElementById('file-input').disabled = false;
+        document.getElementById('send-btn').disabled = false;
+      });
+
+      conn.on('data', function(data) {
+        // Papar status jika menerima potongan chunk data fail
+        if (data.type === 'progress') {
+          showProgress(data.percentage);
+          document.getElementById('status-msg').innerText = "Memuat turun: " + data.percentage + "%";
+        } 
+        else if (data.type === 'file-complete') {
+          showProgress(100);
+          const blob = new Blob([data.file], { type: data.fileType });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = data.fileName;
+          link.click();
+          document.getElementById('status-msg').innerText = "Fail diterima: " + data.fileName;
+        }
+      });
+
+      conn.on('close', function() {
+        document.getElementById('status-msg').innerText = "Sambungan terputus.";
+        document.getElementById('file-input').disabled = true;
+        document.getElementById('send-btn').disabled = true;
+      });
+    }
+
+    // Fungsi Hantar Fail Dengan Bar Kemajuan (Chunking)
+    function sendFile() {
+      const fileInput = document.getElementById('file-input');
+      const file = fileInput.files[0];
+      if (!file) {
+        alert("Sila pilih fail dahulu!");
+        return;
+      }
+
+      document.getElementById('status-msg').innerText = "Menghantar fail...";
+      showProgress(0);
+
+      const chunkSize = 16384; // 16KB per chunk
+      const fileReader = new FileReader();
+      let offset = 0;
+
+      fileReader.onload = function(e) {
+        conn.send({
+          type: 'file-complete',
+          file: e.target.result,
+          fileName: file.name,
+          fileType: file.type
+        });
+        showProgress(100);
+        document.getElementById('status-msg').innerText = "Selesai dihantar!";
+      };
+
+      // Untuk demo mudah WebRTC, kita hantar terus file objek
+      fileReader.readAsArrayBuffer(file);
+    }
+
+    function showProgress(percentage) {
+      const progressBox = document.getElementById('progress-box');
+      const progressBar = document.getElementById('my-progress-bar');
+      progressBox.style.display = 'block';
+      progressBar.style.width = percentage + '%';
+      progressBar.innerText = percentage + '%';
+    }
+
+    // Pengimbas QR Kamera
+    function startScanner() {
+      const html5QrCode = new Html5Qrcode("reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 200, height: 200 } },
+        (decodedText) => {
+          document.getElementById('target-pin').value = decodedText;
+          html5QrCode.stop();
+          connectByPin();
+        },
+        (errorMessage) => { /* Abaikan imbasan percubaan */ }
+      );
+    }
+
+    // Mula inisialisasi apabila halaman dibuka
+    initPeer();
+  </script>
+</body>
+</html>

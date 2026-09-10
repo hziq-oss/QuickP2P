@@ -1,0 +1,17 @@
+{
+  "short_name": "P2P Share",
+  "name": "P2P Direct File Share",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1041/1041988.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#f0f2f5",
+  "theme_color": "#007bff",
+  "display": "standalone",
+  "orientation": "portrait"
+}

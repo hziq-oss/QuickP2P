@@ -3,8 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pindahan Fail P2P Selamat</title>
+  <title>P2P DirectShare</title>
   
+  <!-- Tetapan PWA & Chrome Install -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#007bff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1041/1041988.png">
+
   <!-- Library PeerJS (WebRTC Sambungan P2P) -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <!-- Library QRCode (Penjana QR Code) -->
@@ -20,6 +27,7 @@
     input[type="text"] { width: 100%; padding: 12px; font-size: 20px; text-align: center; border: 2px solid #ddd; border-radius: 8px; margin-bottom: 12px; }
     button { padding: 12px 20px; font-size: 16px; font-weight: bold; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 5px; }
     button:disabled { background: #ccc; cursor: not-allowed; }
+    #install-btn { background: #6f42c1; display: none; margin-bottom: 15px; }
     #qrcode { display: flex; justify-content: center; margin: 15px 0; }
     #reader { width: 100%; margin-top: 10px; }
     .status { margin-top: 12px; font-size: 14px; font-weight: bold; color: #555; word-break: break-all; }
@@ -31,7 +39,10 @@
 </head>
 <body>
 
-  <h2 style="text-align: center;">Pindahan Fail P2P</h2>
+  <!-- BUTANG INSTALL CHROME -->
+  <button id="install-btn">📲 Pasang Aplikasi (Install App)</button>
+
+  <h2 style="text-align: center; margin-top:0;">P2P DirectShare</h2>
 
   <!-- SEKSYEN 1: PERANTI INI -->
   <div class="card">
@@ -66,7 +77,43 @@
   </div>
 
   <script>
-    // Awalan unik untuk elak pertindihan dengan pengguna PeerJS lain di dunia
+    // -------------------------------------------------------------
+    // 1. PENDAFTARAN SERVICE WORKER & CHROME PWA INSTALL DYNAMIC
+    // -------------------------------------------------------------
+    let deferredPrompt;
+    const installBtn = document.getElementById('install-btn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.style.display = 'block';
+    });
+
+    installBtn.addEventListener('click', () => {
+      installBtn.style.display = 'none';
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+          deferredPrompt = null;
+        });
+      }
+    });
+
+    // Cipta Service Worker secara automatik tanpa perlukan fail sw.js berasingan
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        self.addEventListener('install', e => self.skipWaiting());
+        self.addEventListener('activate', e => self.clients.claim());
+        self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
+      `;
+      const blob = new Blob([swCode], { type: 'text/javascript' });
+      const swUrl = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swUrl).catch(err => console.log('SW Error:', err));
+    }
+
+    // -------------------------------------------------------------
+    // 2. LOGIK LOGIK PEMINDAHAN FAIL P2P (WEBRTC)
+    // -------------------------------------------------------------
     const peerPrefix = "haziq-p2p-v2-";
     let randomPin = "";
     let peer = null;
@@ -81,7 +128,6 @@
       randomPin = generatePin();
       document.getElementById('my-pin').innerText = randomPin;
 
-      // Bina QR Code
       if (qrCodeObj) {
         qrCodeObj.clear();
         qrCodeObj.makeCode(randomPin);
@@ -100,25 +146,22 @@
         document.getElementById('status-msg').innerText = "Sedia untuk disambungkan.";
       });
 
-      // Elak ralat jika PIN kebetulan sedang digunakan orang lain
       peer.on('error', function(err) {
         if (err.type === 'unavailable-id') {
           document.getElementById('status-msg').innerText = "PIN bertindih, menjana PIN baharu...";
           peer.destroy();
-          initPeer(); // Jana semula PIN baharu automatik
+          initPeer();
         } else {
           document.getElementById('status-msg').innerText = "Ralat: " + err.type;
         }
       });
 
-      // Menerima sambungan daripada peranti lain
       peer.on('connection', function(c) {
         conn = c;
         setupConnection();
       });
     }
 
-    // Sambung menggunakan PIN 6 angka
     function connectByPin() {
       const pin = document.getElementById('target-pin').value.trim();
       if (pin.length !== 6) {
@@ -131,7 +174,6 @@
       setupConnection();
     }
 
-    // Tetapan Sambungan & Pengendalian Data Fail
     function setupConnection() {
       conn.on('open', function() {
         document.getElementById('status-msg').innerText = "Tersambung! Sedia menghantar fail.";
@@ -140,7 +182,6 @@
       });
 
       conn.on('data', function(data) {
-        // Papar status jika menerima potongan chunk data fail
         if (data.type === 'progress') {
           showProgress(data.percentage);
           document.getElementById('status-msg').innerText = "Memuat turun: " + data.percentage + "%";
@@ -163,7 +204,6 @@
       });
     }
 
-    // Fungsi Hantar Fail Dengan Bar Kemajuan (Chunking)
     function sendFile() {
       const fileInput = document.getElementById('file-input');
       const file = fileInput.files[0];
@@ -175,10 +215,7 @@
       document.getElementById('status-msg').innerText = "Menghantar fail...";
       showProgress(0);
 
-      const chunkSize = 16384; // 16KB per chunk
       const fileReader = new FileReader();
-      let offset = 0;
-
       fileReader.onload = function(e) {
         conn.send({
           type: 'file-complete',
@@ -190,7 +227,6 @@
         document.getElementById('status-msg').innerText = "Selesai dihantar!";
       };
 
-      // Untuk demo mudah WebRTC, kita hantar terus file objek
       fileReader.readAsArrayBuffer(file);
     }
 
@@ -202,7 +238,6 @@
       progressBar.innerText = percentage + '%';
     }
 
-    // Pengimbas QR Kamera
     function startScanner() {
       const html5QrCode = new Html5Qrcode("reader");
       html5QrCode.start(
@@ -213,11 +248,10 @@
           html5QrCode.stop();
           connectByPin();
         },
-        (errorMessage) => { /* Abaikan imbasan percubaan */ }
+        (errorMessage) => { }
       );
     }
 
-    // Mula inisialisasi apabila halaman dibuka
     initPeer();
   </script>
 </body>

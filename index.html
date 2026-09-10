@@ -35,9 +35,10 @@
       --border: #e2e8f0;
       --input-bg: #ffffff;
       --id-bg: #f1f5f9;
+      --danger: #ef4444;
     }
 
-    /* 6. MOD GELAP AUTOMATIK (DARK MODE) */
+    /* MOD GELAP AUTOMATIK */
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #0f172a;
@@ -142,6 +143,7 @@
     .btn:active { transform: scale(0.98); }
     .btn:disabled { background: #cbd5e1; cursor: not-allowed; }
     .btn-secondary { background: #10b981; }
+    .btn-danger { background: var(--danger); }
     .btn-install { background: #7c3aed; display: none; margin-bottom: 16px; }
 
     .divider { display: flex; align-items: center; text-align: center; color: var(--text-muted); font-size: 12px; margin: 12px 0; }
@@ -177,13 +179,37 @@
     .progress-container { width: 100%; background-color: var(--border); border-radius: 10px; margin-top: 14px; display: none; overflow: hidden; }
     .progress-bar { width: 0%; height: 20px; background-color: var(--primary); text-align: center; line-height: 20px; color: white; font-size: 11px; font-weight: 600; }
 
-    /* 3. PRATONTON FAIL */
     .preview-box { display: none; margin: 10px 0; text-align: center; }
     .preview-box img { max-width: 100%; max-height: 150px; border-radius: 8px; border: 1px solid var(--border); }
 
-    /* 5. SEJARAH PINDAHAN */
     .history-list { text-align: left; font-size: 12px; margin-top: 8px; max-height: 120px; overflow-y: auto; }
     .history-item { padding: 6px 0; border-bottom: 1px solid var(--border); color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+
+    /* MODAL PENGESAHAN (ACCEPT / REJECT) */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .modal-card {
+      background: var(--card-bg);
+      padding: 24px;
+      border-radius: 16px;
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+      border: 1px solid var(--border);
+    }
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
   </style>
 </head>
 <body>
@@ -219,18 +245,16 @@
     <div id="reader"></div>
   </div>
 
-  <!-- SEKSYEN 3: HANTAR FAIL (SOKONG MULTIPLE FILES) -->
+  <!-- SEKSYEN 3: HANTAR FAIL -->
   <div class="card">
     <div class="card-title"><i data-lucide="file-up"></i> Hantar Fail</div>
     
     <div class="file-dropzone" onclick="document.getElementById('file-input').click()">
       <i data-lucide="upload-cloud" style="width:32px; height:32px; color:var(--primary);"></i>
       <p style="font-size:13px; font-weight:500; margin-top:6px;" id="file-name-label">Klik untuk pilih fail (Boleh pilih banyak)</p>
-      <!-- 2. HANTAR BANYAK FAIL (MULTIPLE) -->
       <input type="file" id="file-input" multiple style="display:none;" disabled onchange="updateFileName(this)">
     </div>
 
-    <!-- 3. PRATONTON GAMBAR -->
     <div class="preview-box" id="preview-box">
       <img id="img-preview" src="" alt="Pratonton">
     </div>
@@ -244,7 +268,7 @@
     </div>
   </div>
 
-  <!-- 1. SEKSYEN HANTAR TEKS / LINK PANTAS -->
+  <!-- SEKSYEN 4: HANTAR TEKS / LINK PANTAS -->
   <div class="card">
     <div class="card-title"><i data-lucide="message-square"></i> Hantar Teks / Link Pantas</div>
     <textarea id="text-input" rows="2" placeholder="Taip teks atau tampal link URL di sini..." disabled></textarea>
@@ -253,7 +277,7 @@
     </button>
   </div>
 
-  <!-- 5. SEJARAH PINDAHAN SESI INI -->
+  <!-- SEKSYEN 5: SEJARAH PINDAHAN SESI INI -->
   <div class="card">
     <div class="card-title"><i data-lucide="history"></i> Sejarah Pindahan</div>
     <div class="history-list" id="history-list">
@@ -265,10 +289,22 @@
     </div>
   </div>
 
+  <!-- MODAL HANDSHAKE ACCEPT/REJECT -->
+  <div class="modal-overlay" id="request-modal">
+    <div class="modal-card">
+      <i data-lucide="shield-alert" style="width:48px; height:48px; color:var(--primary); margin-bottom:12px;"></i>
+      <h3 style="font-size:18px; margin-bottom:8px;">Permintaan Sambungan</h3>
+      <p style="font-size:14px; color:var(--text-muted);" id="modal-desc">Peranti luar ingin menyambung ke peranti anda.</p>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" onclick="acceptConnection()"><i data-lucide="check"></i> Accept</button>
+        <button class="btn btn-danger" onclick="rejectConnection()"><i data-lucide="x"></i> Reject</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     lucide.createIcons();
 
-    // 4. BUNYI & GETARAN (AUDIO / HAPTIC FEEDBACK)
     function playBeep() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -301,11 +337,12 @@
       navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: 'text/javascript' }))).catch(() => {});
     }
 
-    // WEBRTC LOGIC
+    // WEBRTC LOGIC WITH HANDSHAKE
     const peerPrefix = "haziq-p2p-v2-";
     let randomPin = "";
     let peer = null;
     let conn = null;
+    let pendingConn = null;
     let qrCodeObj = null;
 
     function generatePin() { return Math.floor(100000 + Math.random() * 900000).toString(); }
@@ -318,7 +355,6 @@
       if (input.files && input.files.length > 0) {
         if (input.files.length === 1) {
           document.getElementById('file-name-label').innerText = input.files[0].name;
-          // 3. Pratonton jika imej
           if (input.files[0].type.startsWith('image/')) {
             imgPrev.src = URL.createObjectURL(input.files[0]);
             pBox.style.display = 'block';
@@ -356,30 +392,73 @@
         else { document.getElementById('status-msg').innerText = "Ralat: " + err.type; }
       });
 
-      peer.on('connection', (c) => { conn = c; setupConnection(); });
+      // Menerima permintaan sambungan dari Pihak 1
+      peer.on('connection', (c) => { 
+        pendingConn = c;
+        playBeep();
+        document.getElementById('modal-desc').innerText = `Peranti dengan ID [${c.peer.replace(peerPrefix, '')}] ingin menyambung ke peranti anda.`;
+        document.getElementById('request-modal').style.display = 'flex';
+      });
+    }
+
+    function acceptConnection() {
+      document.getElementById('request-modal').style.display = 'none';
+      if (pendingConn) {
+        conn = pendingConn;
+        pendingConn = null;
+        setupConnectionListener();
+        conn.send({ type: 'handshake-response', status: 'accepted' });
+        enableInterface();
+      }
+    }
+
+    function rejectConnection() {
+      document.getElementById('request-modal').style.display = 'none';
+      if (pendingConn) {
+        pendingConn.send({ type: 'handshake-response', status: 'rejected' });
+        setTimeout(() => { pendingConn.close(); pendingConn = null; }, 500);
+      }
     }
 
     function connectByPin() {
       const pin = document.getElementById('target-pin').value.trim();
       if (pin.length !== 6) { alert("Sila masukkan 6 angka PIN yang betul!"); return; }
-      document.getElementById('status-msg').innerText = "Menghubungkan ke PIN " + pin + "...";
+      document.getElementById('status-msg').innerText = "Menghantar permintaan sambungan ke PIN " + pin + "...";
       conn = peer.connect(peerPrefix + pin);
-      setupConnection();
-    }
-
-    function setupConnection() {
+      
       conn.on('open', () => {
-        playBeep(); // Bunyi apabila sambungan berjaya
-        document.getElementById('status-msg').innerHTML = `<i data-lucide="wifi" style="width:14px; color:#10b981;"></i> Tersambung! Sedia hantar fail/teks.`;
-        document.getElementById('file-input').disabled = false;
-        document.getElementById('send-btn').disabled = false;
-        document.getElementById('text-input').disabled = false;
-        document.getElementById('send-text-btn').disabled = false;
-        lucide.createIcons();
+        // Hantar mesej meminta pengesahan
+        conn.send({ type: 'handshake-request' });
       });
 
+      setupConnectionListener();
+    }
+
+    function enableInterface() {
+      playBeep();
+      document.getElementById('status-msg').innerHTML = `<i data-lucide="wifi" style="width:14px; color:#10b981;"></i> Tersambung! Sedia hantar fail/teks.`;
+      document.getElementById('file-input').disabled = false;
+      document.getElementById('send-btn').disabled = false;
+      document.getElementById('text-input').disabled = false;
+      document.getElementById('send-text-btn').disabled = false;
+      lucide.createIcons();
+    }
+
+    function setupConnectionListener() {
       conn.on('data', (data) => {
-        playBeep(); // Bunyi apabila data diterima
+        // PROSES HANDSHAKE RESPONSE
+        if (data.type === 'handshake-response') {
+          if (data.status === 'accepted') {
+            enableInterface();
+          } else {
+            alert("Permintaan sambungan anda telah ditolak oleh penerima.");
+            document.getElementById('status-msg').innerText = "Sambungan ditolak.";
+            conn.close();
+          }
+          return;
+        }
+
+        playBeep();
         if (data.type === 'text') {
           alert("Teks Diterima:\n" + data.content);
           addHistory("Teks: " + data.content.substring(0, 20) + "...", true);
@@ -406,7 +485,6 @@
       });
     }
 
-    // 1. FUNGSI HANTAR TEKS PANTAS
     function sendText() {
       const txt = document.getElementById('text-input').value.trim();
       if (!txt) return;
@@ -416,7 +494,6 @@
       alert("Teks berjaya dihantar!");
     }
 
-    // 2. FUNGSI HANTAR BANYAK FAIL (MULTIPLE FILES)
     function sendFiles() {
       const files = document.getElementById('file-input').files;
       if (!files || files.length === 0) { alert("Sila pilih fail dahulu!"); return; }

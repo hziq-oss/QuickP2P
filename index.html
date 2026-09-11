@@ -185,7 +185,7 @@
     .history-list { text-align: left; font-size: 12px; margin-top: 8px; max-height: 120px; overflow-y: auto; }
     .history-item { padding: 6px 0; border-bottom: 1px solid var(--border); color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
 
-    /* MODAL PENGESAHAN (ACCEPT / REJECT) */
+    /* MODAL PENGESAHAN HANDSHAKE */
     .modal-overlay {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -228,7 +228,7 @@
     <div class="card-title"><i data-lucide="smartphone"></i> ID Peranti Ini</div>
     <div class="id-box" id="my-pin">------</div>
     <div id="qrcode"></div>
-    <p style="font-size: 12px; color: var(--text-muted);">Gunakan PIN 6-angka ini atau imbas QR</p>
+    <p style="font-size: 12px; color: var(--text-muted);">PIN sementara ini bertukar setiap kali dibuka / refresh</p>
   </div>
 
   <!-- SEKSYEN 2: SAMBUNG PERANTI -->
@@ -317,6 +317,33 @@
       } catch(e) {}
     }
 
+    // 1. SCREEN WAKE LOCK LOGIC (MENCEGAH SKRIN GELAP)
+    let wakeLock = null;
+
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.log('Wake Lock Error:', err.message);
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock !== null) {
+        wakeLock.release().then(() => {
+          wakeLock = null;
+        });
+      }
+    }
+
+    document.addEventListener('visibilitychange', async () => {
+      if (wakeLock !== null && document.visibilityState === 'visible') {
+        await requestWakeLock();
+      }
+    });
+
     // PWA INSTALL
     let deferredPrompt;
     const installBtn = document.getElementById('install-btn');
@@ -337,7 +364,7 @@
       navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: 'text/javascript' }))).catch(() => {});
     }
 
-    // WEBRTC LOGIC WITH HANDSHAKE
+    // 2. WEBRTC LOGIC (DYNAMIC OTP & AUTO DISCONNECT BILA REFRESH)
     const peerPrefix = "haziq-p2p-v2-";
     let randomPin = "";
     let peer = null;
@@ -345,6 +372,7 @@
     let pendingConn = null;
     let qrCodeObj = null;
 
+    // Menjana Dynamic OTP 6-Digit setiap kali dimuatkan
     function generatePin() { return Math.floor(100000 + Math.random() * 900000).toString(); }
 
     function updateFileName(input) {
@@ -392,11 +420,10 @@
         else { document.getElementById('status-msg').innerText = "Ralat: " + err.type; }
       });
 
-      // Menerima permintaan sambungan dari Pihak 1
       peer.on('connection', (c) => { 
         pendingConn = c;
         playBeep();
-        document.getElementById('modal-desc').innerText = `Peranti dengan ID [${c.peer.replace(peerPrefix, '')}] ingin menyambung ke peranti anda.`;
+        document.getElementById('modal-desc').innerText = `Peranti dengan PIN [${c.peer.replace(peerPrefix, '')}] ingin menyambung ke peranti anda.`;
         document.getElementById('request-modal').style.display = 'flex';
       });
     }
@@ -427,7 +454,6 @@
       conn = peer.connect(peerPrefix + pin);
       
       conn.on('open', () => {
-        // Hantar mesej meminta pengesahan
         conn.send({ type: 'handshake-request' });
       });
 
@@ -436,6 +462,7 @@
 
     function enableInterface() {
       playBeep();
+      requestWakeLock(); // Halang skrin terpadam
       document.getElementById('status-msg').innerHTML = `<i data-lucide="wifi" style="width:14px; color:#10b981;"></i> Tersambung! Sedia hantar fail/teks.`;
       document.getElementById('file-input').disabled = false;
       document.getElementById('send-btn').disabled = false;
@@ -444,9 +471,17 @@
       lucide.createIcons();
     }
 
+    function disableInterface() {
+      releaseWakeLock(); // Lepaskan penguncian skrin
+      document.getElementById('status-msg').innerText = "Sambungan terputus. Sila masukkan PIN baharu.";
+      document.getElementById('file-input').disabled = true;
+      document.getElementById('send-btn').disabled = true;
+      document.getElementById('text-input').disabled = true;
+      document.getElementById('send-text-btn').disabled = true;
+    }
+
     function setupConnectionListener() {
       conn.on('data', (data) => {
-        // PROSES HANDSHAKE RESPONSE
         if (data.type === 'handshake-response') {
           if (data.status === 'accepted') {
             enableInterface();
@@ -476,14 +511,21 @@
         }
       });
 
+      // Melupuskan sambungan secara automatik jika peranti sebelah lagi refresh
       conn.on('close', () => {
-        document.getElementById('status-msg').innerText = "Sambungan terputus.";
-        document.getElementById('file-input').disabled = true;
-        document.getElementById('send-btn').disabled = true;
-        document.getElementById('text-input').disabled = true;
-        document.getElementById('send-text-btn').disabled = true;
+        disableInterface();
+      });
+      
+      conn.on('error', () => {
+        disableInterface();
       });
     }
+
+    // Pembersihan sambungan automatik apabila pengguna menutup atau refresh tab
+    window.addEventListener('beforeunload', () => {
+      if (conn) conn.close();
+      if (peer) peer.destroy();
+    });
 
     function sendText() {
       const txt = document.getElementById('text-input').value.trim();

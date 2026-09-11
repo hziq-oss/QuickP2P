@@ -36,6 +36,11 @@
       --input-bg: #ffffff;
       --id-bg: #f1f5f9;
       --danger: #ef4444;
+      --chat-sent: #dcf8c6;
+      --chat-sent-text: #0f172a;
+      --chat-rcvd: #ffffff;
+      --chat-rcvd-text: #0f172a;
+      --chat-bg: #e5ddd5;
     }
 
     /* MOD GELAP AUTOMATIK */
@@ -48,6 +53,11 @@
         --border: #334155;
         --input-bg: #0f172a;
         --id-bg: #0f172a;
+        --chat-sent: #056162;
+        --chat-sent-text: #ffffff;
+        --chat-rcvd: #262d31;
+        --chat-rcvd-text: #ffffff;
+        --chat-bg: #0b141a;
       }
     }
 
@@ -185,6 +195,100 @@
     .history-list { text-align: left; font-size: 12px; margin-top: 8px; max-height: 120px; overflow-y: auto; }
     .history-item { padding: 6px 0; border-bottom: 1px solid var(--border); color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
 
+    /* REKABENTUK TAB NAVIGASI */
+    .nav-tabs {
+      display: flex;
+      background: var(--id-bg);
+      padding: 4px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--card-bg);
+      color: var(--primary);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* REKABENTUK CHATTING WHATSAPP */
+    .chat-container {
+      background: var(--chat-bg);
+      border-radius: 12px;
+      height: 320px;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .chat-bubble {
+      max-width: 80%;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.4;
+      position: relative;
+      word-break: break-word;
+      text-align: left;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    .chat-bubble.sent {
+      align-self: flex-end;
+      background: var(--chat-sent);
+      color: var(--chat-sent-text);
+      border-bottom-right-radius: 2px;
+    }
+    .chat-bubble.received {
+      align-self: flex-start;
+      background: var(--chat-rcvd);
+      color: var(--chat-rcvd-text);
+      border-bottom-left-radius: 2px;
+    }
+    .chat-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-align: right;
+      margin-top: 4px;
+      display: block;
+    }
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .chat-input-row input {
+      margin-bottom: 0;
+      font-size: 14px;
+      text-align: left;
+      letter-spacing: normal;
+      font-weight: normal;
+    }
+    .chat-send-btn {
+      width: auto;
+      padding: 12px 16px;
+      border-radius: 12px;
+    }
+
     /* MODAL PENGESAHAN HANDSHAKE */
     .modal-overlay {
       position: fixed;
@@ -245,36 +349,61 @@
     <div id="reader"></div>
   </div>
 
-  <!-- SEKSYEN 3: HANTAR FAIL -->
-  <div class="card">
-    <div class="card-title"><i data-lucide="file-up"></i> Hantar Fail</div>
-    
-    <div class="file-dropzone" onclick="document.getElementById('file-input').click()">
-      <i data-lucide="upload-cloud" style="width:32px; height:32px; color:var(--primary);"></i>
-      <p style="font-size:13px; font-weight:500; margin-top:6px;" id="file-name-label">Klik untuk pilih fail (Boleh pilih banyak)</p>
-      <input type="file" id="file-input" multiple style="display:none;" disabled onchange="updateFileName(this)">
-    </div>
-
-    <div class="preview-box" id="preview-box">
-      <img id="img-preview" src="" alt="Pratonton">
-    </div>
-
-    <button id="send-btn" class="btn" onclick="sendFiles()" disabled>
-      <i data-lucide="send"></i> Hantar Fail
+  <!-- NAVIGASI TAB UTAMA -->
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('files-tab')">
+      <i data-lucide="folder"></i> Pindahan Fail
     </button>
-    
-    <div class="progress-container" id="progress-box">
-      <div class="progress-bar" id="my-progress-bar">0%</div>
+    <button class="tab-btn" onclick="switchTab('chat-tab')">
+      <i data-lucide="message-square"></i> Chatting
+    </button>
+  </div>
+
+  <!-- TAB 1: PINDAHAN FAIL -->
+  <div id="files-tab" class="tab-content active">
+    <div class="card">
+      <div class="card-title"><i data-lucide="file-up"></i> Hantar Fail</div>
+      
+      <div class="file-dropzone" onclick="document.getElementById('file-input').click()">
+        <i data-lucide="upload-cloud" style="width:32px; height:32px; color:var(--primary);"></i>
+        <p style="font-size:13px; font-weight:500; margin-top:6px;" id="file-name-label">Klik untuk pilih fail (Boleh pilih banyak)</p>
+        <input type="file" id="file-input" multiple style="display:none;" disabled onchange="updateFileName(this)">
+      </div>
+
+      <div class="preview-box" id="preview-box">
+        <img id="img-preview" src="" alt="Pratonton">
+      </div>
+
+      <button id="send-btn" class="btn" onclick="sendFiles()" disabled>
+        <i data-lucide="send"></i> Hantar Fail
+      </button>
+      
+      <div class="progress-container" id="progress-box">
+        <div class="progress-bar" id="my-progress-bar">0%</div>
+      </div>
     </div>
   </div>
 
-  <!-- SEKSYEN 4: HANTAR TEKS / LINK PANTAS -->
-  <div class="card">
-    <div class="card-title"><i data-lucide="message-square"></i> Hantar Teks / Link Pantas</div>
-    <textarea id="text-input" rows="2" placeholder="Taip teks atau tampal link URL di sini..." disabled></textarea>
-    <button id="send-text-btn" class="btn" onclick="sendText()" disabled style="background:#7c3aed;">
-      <i data-lucide="send"></i> Hantar Teks
-    </button>
+  <!-- TAB 2: CHATTING GAYA WHATSAPP -->
+  <div id="chat-tab" class="tab-content">
+    <div class="card">
+      <div class="card-title"><i data-lucide="message-circle"></i> Sembang Langsung</div>
+      
+      <!-- TETINGKAP GELEMBUNG CHAT -->
+      <div class="chat-container" id="chat-box">
+        <div style="text-align:center; color:var(--text-muted); font-size:12px; margin:auto;" id="chat-empty-msg">
+          Belum ada mesej. Mula berhubung!
+        </div>
+      </div>
+
+      <!-- BORANG INPUT MESEJ -->
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Taip mesej..." disabled onkeypress="handleChatKeyPress(event)">
+        <button id="send-chat-btn" class="btn chat-send-btn" onclick="sendChatMessage()" disabled>
+          <i data-lucide="send"></i>
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- SEKSYEN 5: SEJARAH PINDAHAN SESI INI -->
@@ -304,6 +433,15 @@
 
   <script>
     lucide.createIcons();
+
+    // TUKAR TAB NAVIGASI
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+      document.getElementById(tabId).classList.add('active');
+      event.currentTarget.classList.add('active');
+    }
 
     function playBeep() {
       try {
@@ -372,7 +510,6 @@
     let pendingConn = null;
     let qrCodeObj = null;
 
-    // Menjana Dynamic OTP 6-Digit setiap kali dimuatkan
     function generatePin() { return Math.floor(100000 + Math.random() * 900000).toString(); }
 
     function updateFileName(input) {
@@ -462,22 +599,22 @@
 
     function enableInterface() {
       playBeep();
-      requestWakeLock(); // Halang skrin terpadam
+      requestWakeLock();
       document.getElementById('status-msg').innerHTML = `<i data-lucide="wifi" style="width:14px; color:#10b981;"></i> Tersambung! Sedia hantar fail/teks.`;
       document.getElementById('file-input').disabled = false;
       document.getElementById('send-btn').disabled = false;
-      document.getElementById('text-input').disabled = false;
-      document.getElementById('send-text-btn').disabled = false;
+      document.getElementById('chat-input').disabled = false;
+      document.getElementById('send-chat-btn').disabled = false;
       lucide.createIcons();
     }
 
     function disableInterface() {
-      releaseWakeLock(); // Lepaskan penguncian skrin
+      releaseWakeLock();
       document.getElementById('status-msg').innerText = "Sambungan terputus. Sila masukkan PIN baharu.";
       document.getElementById('file-input').disabled = true;
       document.getElementById('send-btn').disabled = true;
-      document.getElementById('text-input').disabled = true;
-      document.getElementById('send-text-btn').disabled = true;
+      document.getElementById('chat-input').disabled = true;
+      document.getElementById('send-chat-btn').disabled = true;
     }
 
     function setupConnectionListener() {
@@ -495,8 +632,8 @@
 
         playBeep();
         if (data.type === 'text') {
-          alert("Teks Diterima:\n" + data.content);
-          addHistory("Teks: " + data.content.substring(0, 20) + "...", true);
+          appendChatMessage(data.content, 'received');
+          addHistory("Chat: " + data.content.substring(0, 20) + "...", true);
         }
         else if (data.type === 'file-complete') {
           showProgress(100);
@@ -511,29 +648,53 @@
         }
       });
 
-      // Melupuskan sambungan secara automatik jika peranti sebelah lagi refresh
-      conn.on('close', () => {
-        disableInterface();
-      });
-      
-      conn.on('error', () => {
-        disableInterface();
-      });
+      conn.on('close', () => { disableInterface(); });
+      conn.on('error', () => { disableInterface(); });
     }
 
-    // Pembersihan sambungan automatik apabila pengguna menutup atau refresh tab
     window.addEventListener('beforeunload', () => {
       if (conn) conn.close();
       if (peer) peer.destroy();
     });
 
-    function sendText() {
-      const txt = document.getElementById('text-input').value.trim();
-      if (!txt) return;
+    // FUNGSI CHATTING WHATSAPP
+    function sendChatMessage() {
+      const input = document.getElementById('chat-input');
+      const txt = input.value.trim();
+      if (!txt || !conn) return;
+
       conn.send({ type: 'text', content: txt });
-      addHistory("Teks: " + txt.substring(0, 20) + "...", false);
-      document.getElementById('text-input').value = '';
-      alert("Teks berjaya dihantar!");
+      appendChatMessage(txt, 'sent');
+      addHistory("Chat: " + txt.substring(0, 20) + "...", false);
+      input.value = '';
+    }
+
+    function handleChatKeyPress(e) {
+      if (e.key === 'Enter') {
+        sendChatMessage();
+      }
+    }
+
+    function appendChatMessage(text, type) {
+      const chatBox = document.getElementById('chat-box');
+      const emptyMsg = document.getElementById('chat-empty-msg');
+      if (emptyMsg) emptyMsg.style.display = 'none';
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      const bubble = document.createElement('div');
+      bubble.className = `chat-bubble ${type}`;
+      bubble.innerHTML = `
+        ${escapeHtml(text)}
+        <span class="chat-time">${timeStr}</span>
+      `;
+
+      chatBox.appendChild(bubble);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
 
     function sendFiles() {

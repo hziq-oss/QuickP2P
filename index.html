@@ -110,18 +110,18 @@
     }
 
     .id-box { 
-      font-size: 36px; 
+      font-size: 32px; 
       font-weight: 700; 
-      letter-spacing: 6px; 
+      letter-spacing: 4px; 
       color: var(--primary); 
       background: var(--id-bg);
       padding: 12px;
       border-radius: 12px;
-      margin: 12px 0;
+      margin: 8px 0;
       font-family: monospace;
     }
 
-    input[type="text"], textarea { 
+    input[type="text"], input[type="password"] { 
       width: 100%; 
       padding: 12px; 
       font-size: 15px; 
@@ -132,7 +132,7 @@
       color: var(--text-main);
       outline: none;
     }
-    input[type="text"] { font-size: 20px; text-align: center; font-weight: 600; letter-spacing: 2px; }
+    .pin-input { font-size: 20px; text-align: center; font-weight: 600; letter-spacing: 2px; }
 
     .btn { 
       padding: 12px 20px; 
@@ -154,6 +154,7 @@
     .btn:disabled { background: #cbd5e1; cursor: not-allowed; }
     .btn-secondary { background: #10b981; }
     .btn-danger { background: var(--danger); }
+    .btn-subtle { background: transparent; color: var(--text-muted); border: 1px dashed var(--border); font-size: 12px; padding: 6px; margin-top: 8px; }
     .btn-install { background: #7c3aed; display: none; margin-bottom: 16px; }
 
     .divider { display: flex; align-items: center; text-align: center; color: var(--text-muted); font-size: 12px; margin: 12px 0; }
@@ -314,6 +315,17 @@
       gap: 10px;
       margin-top: 16px;
     }
+    .passcode-box {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .passcode-box input {
+      margin-bottom: 0;
+      font-size: 14px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -331,14 +343,24 @@
   <div class="card">
     <div class="card-title"><i data-lucide="smartphone"></i> ID Peranti Ini</div>
     <div class="id-box" id="my-pin">------</div>
+    
+    <!-- LALUAN PASSCODE SAYA -->
+    <div class="passcode-box">
+      <span style="font-size: 12px; color: var(--text-muted); min-width: 90px; text-align: left;">Passcode Rahsia:</span>
+      <input type="text" id="my-passcode" value="1234" maxlength="10" title="Passcode untuk elak peranti tak dikenal pasti menyambung">
+    </div>
+
     <div id="qrcode"></div>
-    <p style="font-size: 12px; color: var(--text-muted);">PIN sementara ini bertukar setiap kali dibuka / refresh</p>
+    <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;" id="pin-timer">Masa tamat PIN: --:--</p>
+    <button class="btn btn-subtle" onclick="forceNewPin()"><i data-lucide="refresh-cw"></i> Tukar PIN Sekarang</button>
   </div>
 
   <!-- SEKSYEN 2: SAMBUNG PERANTI -->
   <div class="card">
     <div class="card-title"><i data-lucide="link"></i> Sambung Peranti Sasaran</div>
-    <input type="text" id="target-pin" placeholder="000000" maxlength="6">
+    <input type="text" class="pin-input" id="target-pin" placeholder="PIN SASARAN" maxlength="6">
+    <input type="password" id="target-passcode" placeholder="Passcode Peranti Sasaran (Lalai: 1234)">
+    
     <button class="btn" onclick="connectByPin()">
       <i data-lucide="arrow-right-circle"></i> Sambung Guna PIN
     </button>
@@ -351,10 +373,10 @@
 
   <!-- NAVIGASI TAB UTAMA -->
   <div class="nav-tabs">
-    <button class="tab-btn active" onclick="switchTab('files-tab')">
+    <button class="tab-btn active" onclick="switchTab('files-tab', event)">
       <i data-lucide="folder"></i> Pindahan Fail
     </button>
-    <button class="tab-btn" onclick="switchTab('chat-tab')">
+    <button class="tab-btn" onclick="switchTab('chat-tab', event)">
       <i data-lucide="message-square"></i> Chatting
     </button>
   </div>
@@ -389,14 +411,12 @@
     <div class="card">
       <div class="card-title"><i data-lucide="message-circle"></i> Sembang Langsung</div>
       
-      <!-- TETINGKAP GELEMBUNG CHAT -->
       <div class="chat-container" id="chat-box">
         <div style="text-align:center; color:var(--text-muted); font-size:12px; margin:auto;" id="chat-empty-msg">
           Belum ada mesej. Mula berhubung!
         </div>
       </div>
 
-      <!-- BORANG INPUT MESEJ -->
       <div class="chat-input-row">
         <input type="text" id="chat-input" placeholder="Taip mesej..." disabled onkeypress="handleChatKeyPress(event)">
         <button id="send-chat-btn" class="btn chat-send-btn" onclick="sendChatMessage()" disabled>
@@ -425,8 +445,8 @@
       <h3 style="font-size:18px; margin-bottom:8px;">Permintaan Sambungan</h3>
       <p style="font-size:14px; color:var(--text-muted);" id="modal-desc">Peranti luar ingin menyambung ke peranti anda.</p>
       <div class="modal-buttons">
-        <button class="btn btn-secondary" onclick="acceptConnection()"><i data-lucide="check"></i> Accept</button>
-        <button class="btn btn-danger" onclick="rejectConnection()"><i data-lucide="x"></i> Reject</button>
+        <button class="btn btn-secondary" onclick="acceptConnection()"><i data-lucide="check"></i> Terima</button>
+        <button class="btn btn-danger" onclick="rejectConnection()"><i data-lucide="x"></i> Tolak</button>
       </div>
     </div>
   </div>
@@ -434,13 +454,12 @@
   <script>
     lucide.createIcons();
 
-    // TUKAR TAB NAVIGASI
-    function switchTab(tabId) {
+    function switchTab(tabId, e) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
 
       document.getElementById(tabId).classList.add('active');
-      event.currentTarget.classList.add('active');
+      e.currentTarget.classList.add('active');
     }
 
     function playBeep() {
@@ -455,34 +474,23 @@
       } catch(e) {}
     }
 
-    // 1. SCREEN WAKE LOCK LOGIC (MENCEGAH SKRIN GELAP)
+    // WAKE LOCK LOGIC
     let wakeLock = null;
-
     async function requestWakeLock() {
       try {
-        if ('wakeLock' in navigator) {
-          wakeLock = await navigator.wakeLock.request('screen');
-        }
-      } catch (err) {
-        console.log('Wake Lock Error:', err.message);
-      }
+        if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+      } catch (err) {}
     }
 
     function releaseWakeLock() {
-      if (wakeLock !== null) {
-        wakeLock.release().then(() => {
-          wakeLock = null;
-        });
-      }
+      if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); }
     }
 
     document.addEventListener('visibilitychange', async () => {
-      if (wakeLock !== null && document.visibilityState === 'visible') {
-        await requestWakeLock();
-      }
+      if (wakeLock !== null && document.visibilityState === 'visible') await requestWakeLock();
     });
 
-    // PWA INSTALL
+    // PWA INSTALLATION
     let deferredPrompt;
     const installBtn = document.getElementById('install-btn');
     window.addEventListener('beforeinstallprompt', (e) => {
@@ -493,24 +501,58 @@
       if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.then(() => { deferredPrompt = null; }); }
     });
 
-    if ('serviceWorker' in navigator) {
-      const swCode = `
-        self.addEventListener('install', e => self.skipWaiting());
-        self.addEventListener('activate', e => self.clients.claim());
-        self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
-      `;
-      navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode], { type: 'text/javascript' }))).catch(() => {});
+    // SISTEM MANAGEMENT PIN BERSTEMPOH (1 JAM)
+    const PIN_DURATION_MS = 60 * 60 * 1000; // 1 Jam
+
+    function getOrGenerateSessionPin() {
+      const savedPin = localStorage.getItem('p2p_pin');
+      const savedExpiry = localStorage.getItem('p2p_pin_expiry');
+      const now = new Date().getTime();
+
+      if (savedPin && savedExpiry && now < parseInt(savedExpiry)) {
+        return savedPin;
+      } else {
+        const newPin = Math.floor(100000 + Math.random() * 900000).toString();
+        const newExpiry = now + PIN_DURATION_MS;
+        localStorage.setItem('p2p_pin', newPin);
+        localStorage.setItem('p2p_pin_expiry', newExpiry.toString());
+        return newPin;
+      }
     }
 
-    // 2. WEBRTC LOGIC (DYNAMIC OTP & AUTO DISCONNECT BILA REFRESH)
+    function forceNewPin() {
+      localStorage.removeItem('p2p_pin');
+      localStorage.removeItem('p2p_pin_expiry');
+      if (peer) peer.destroy();
+      initPeer();
+    }
+
+    function updateTimerDisplay() {
+      const savedExpiry = localStorage.getItem('p2p_pin_expiry');
+      if (!savedExpiry) return;
+      
+      const now = new Date().getTime();
+      const diff = parseInt(savedExpiry) - now;
+      
+      if (diff <= 0) {
+        document.getElementById('pin-timer').innerText = "Masa tamat PIN: Menjana PIN baharu...";
+        forceNewPin();
+      } else {
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        document.getElementById('pin-timer').innerText = `Kekal aktif: ${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
+      }
+    }
+
+    setInterval(updateTimerDisplay, 1000);
+
+    // WEBRTC LOGIC & PASSCODE VALIDATION
     const peerPrefix = "haziq-p2p-v2-";
     let randomPin = "";
     let peer = null;
     let conn = null;
     let pendingConn = null;
     let qrCodeObj = null;
-
-    function generatePin() { return Math.floor(100000 + Math.random() * 900000).toString(); }
 
     function updateFileName(input) {
       const pBox = document.getElementById('preview-box');
@@ -539,7 +581,7 @@
     }
 
     function initPeer() {
-      randomPin = generatePin();
+      randomPin = getOrGenerateSessionPin();
       document.getElementById('my-pin').innerText = randomPin;
 
       if (qrCodeObj) { qrCodeObj.clear(); qrCodeObj.makeCode(randomPin); } 
@@ -553,15 +595,32 @@
       });
 
       peer.on('error', (err) => {
-        if (err.type === 'unavailable-id') { peer.destroy(); initPeer(); }
-        else { document.getElementById('status-msg').innerText = "Ralat: " + err.type; }
+        if (err.type === 'unavailable-id') { 
+          localStorage.removeItem('p2p_pin');
+          peer.destroy(); 
+          initPeer(); 
+        } else { 
+          document.getElementById('status-msg').innerText = "Ralat: " + err.type; 
+        }
       });
 
       peer.on('connection', (c) => { 
         pendingConn = c;
-        playBeep();
-        document.getElementById('modal-desc').innerText = `Peranti dengan PIN [${c.peer.replace(peerPrefix, '')}] ingin menyambung ke peranti anda.`;
-        document.getElementById('request-modal').style.display = 'flex';
+        c.on('data', (data) => {
+          if (data.type === 'handshake-request') {
+            const myPasscode = document.getElementById('my-passcode').value.trim();
+            // SEMAK PASSCODE
+            if (data.passcode !== myPasscode) {
+              c.send({ type: 'handshake-response', status: 'rejected', reason: 'Passcode Salah' });
+              setTimeout(() => c.close(), 500);
+              return;
+            }
+
+            playBeep();
+            document.getElementById('modal-desc').innerText = `Peranti [${c.peer.replace(peerPrefix, '')}] ingin menyambung ke peranti anda.`;
+            document.getElementById('request-modal').style.display = 'flex';
+          }
+        });
       });
     }
 
@@ -579,19 +638,22 @@
     function rejectConnection() {
       document.getElementById('request-modal').style.display = 'none';
       if (pendingConn) {
-        pendingConn.send({ type: 'handshake-response', status: 'rejected' });
+        pendingConn.send({ type: 'handshake-response', status: 'rejected', reason: 'Ditolak Pengguna' });
         setTimeout(() => { pendingConn.close(); pendingConn = null; }, 500);
       }
     }
 
     function connectByPin() {
       const pin = document.getElementById('target-pin').value.trim();
+      const targetPasscode = document.getElementById('target-passcode').value.trim();
+
       if (pin.length !== 6) { alert("Sila masukkan 6 angka PIN yang betul!"); return; }
+      
       document.getElementById('status-msg').innerText = "Menghantar permintaan sambungan ke PIN " + pin + "...";
       conn = peer.connect(peerPrefix + pin);
       
       conn.on('open', () => {
-        conn.send({ type: 'handshake-request' });
+        conn.send({ type: 'handshake-request', passcode: targetPasscode });
       });
 
       setupConnectionListener();
@@ -623,8 +685,9 @@
           if (data.status === 'accepted') {
             enableInterface();
           } else {
-            alert("Permintaan sambungan anda telah ditolak oleh penerima.");
-            document.getElementById('status-msg').innerText = "Sambungan ditolak.";
+            const reason = data.reason ? ` (${data.reason})` : '';
+            alert("Permintaan sambungan ditolak" + reason);
+            document.getElementById('status-msg').innerText = "Sambungan ditolak" + reason;
             conn.close();
           }
           return;
@@ -657,7 +720,7 @@
       if (peer) peer.destroy();
     });
 
-    // FUNGSI CHATTING WHATSAPP
+    // CHATTING LOGIC
     function sendChatMessage() {
       const input = document.getElementById('chat-input');
       const txt = input.value.trim();
@@ -670,9 +733,7 @@
     }
 
     function handleChatKeyPress(e) {
-      if (e.key === 'Enter') {
-        sendChatMessage();
-      }
+      if (e.key === 'Enter') sendChatMessage();
     }
 
     function appendChatMessage(text, type) {
